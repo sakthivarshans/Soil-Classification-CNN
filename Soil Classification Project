@@ -1,0 +1,547 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "67f122e6",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:41:29.802578Z",
+     "iopub.status.busy": "2025-05-22T18:41:29.802165Z",
+     "iopub.status.idle": "2025-05-22T18:41:50.436316Z",
+     "shell.execute_reply": "2025-05-22T18:41:50.435217Z"
+    },
+    "papermill": {
+     "duration": 20.640394,
+     "end_time": "2025-05-22T18:41:50.438327",
+     "exception": false,
+     "start_time": "2025-05-22T18:41:29.797933",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-05-22 18:41:35.630038: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:477] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered\n",
+      "WARNING: All log messages before absl::InitializeLog() is called are written to STDERR\n",
+      "E0000 00:00:1747939295.889867      13 cuda_dnn.cc:8310] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered\n",
+      "E0000 00:00:1747939295.960557      13 cuda_blas.cc:1418] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered\n"
+     ]
+    }
+   ],
+   "source": [
+    "#Setup and Imports\n",
+    "\n",
+    "import os\n",
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import cv2\n",
+    "from sklearn.preprocessing import LabelEncoder\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from tensorflow.keras.utils import to_categorical\n",
+    "from tensorflow.keras.models import Sequential\n",
+    "from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout\n",
+    "from tensorflow.keras.optimizers import Adam\n",
+    "from tensorflow.keras.callbacks import EarlyStopping\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "# Constants\n",
+    "IMAGE_SIZE = (224, 224)\n",
+    "BATCH_SIZE = 32\n",
+    "EPOCHS = 10\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "935ead5d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:41:50.445209Z",
+     "iopub.status.busy": "2025-05-22T18:41:50.444612Z",
+     "iopub.status.idle": "2025-05-22T18:41:50.450110Z",
+     "shell.execute_reply": "2025-05-22T18:41:50.449122Z"
+    },
+    "papermill": {
+     "duration": 0.010465,
+     "end_time": "2025-05-22T18:41:50.451769",
+     "exception": false,
+     "start_time": "2025-05-22T18:41:50.441304",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Paths\n",
+    "DATA_DIR = \"/kaggle/input/soil-classification/soil_classification-2025\"\n",
+    "TRAIN_DIR = os.path.join(DATA_DIR, \"train\")\n",
+    "TEST_DIR = os.path.join(DATA_DIR, \"test\")\n",
+    "LABELS_CSV = os.path.join(DATA_DIR, \"train_labels.csv\")\n",
+    "TEST_IDS_CSV = os.path.join(DATA_DIR, \"test_ids.csv\")\n",
+    "SAMPLE_SUBMISSION_CSV = os.path.join(DATA_DIR, \"sample_submission.csv\")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "d588830e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:41:50.458142Z",
+     "iopub.status.busy": "2025-05-22T18:41:50.457809Z",
+     "iopub.status.idle": "2025-05-22T18:41:50.495480Z",
+     "shell.execute_reply": "2025-05-22T18:41:50.494553Z"
+    },
+    "papermill": {
+     "duration": 0.042658,
+     "end_time": "2025-05-22T18:41:50.497202",
+     "exception": false,
+     "start_time": "2025-05-22T18:41:50.454544",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Load CSVs\n",
+    "df = pd.read_csv(LABELS_CSV)\n",
+    "test_ids = pd.read_csv(TEST_IDS_CSV)\n",
+    "\n",
+    "# Encode labels into numbers\n",
+    "le = LabelEncoder()\n",
+    "df['label'] = le.fit_transform(df['soil_type'])\n",
+    "\n",
+    "# One-hot encode labels\n",
+    "labels = to_categorical(df['label'])\n",
+    "\n",
+    "# Split into train and validation sets\n",
+    "train_ids, val_ids, train_labels, val_labels = train_test_split(df['image_id'], labels, test_size=0.2, random_state=42)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "962687a4",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:41:50.503359Z",
+     "iopub.status.busy": "2025-05-22T18:41:50.503010Z",
+     "iopub.status.idle": "2025-05-22T18:42:05.382433Z",
+     "shell.execute_reply": "2025-05-22T18:42:05.381612Z"
+    },
+    "papermill": {
+     "duration": 14.884298,
+     "end_time": "2025-05-22T18:42:05.383969",
+     "exception": false,
+     "start_time": "2025-05-22T18:41:50.499671",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Image loading function\n",
+    "def load_images(image_ids, directory):\n",
+    "    images = []\n",
+    "    for img_id in image_ids:\n",
+    "        path = os.path.join(directory, img_id)\n",
+    "        image = cv2.imread(path)\n",
+    "        image = cv2.resize(image, IMAGE_SIZE)\n",
+    "        images.append(image)\n",
+    "    return np.array(images)\n",
+    "\n",
+    "# Load training and validation images\n",
+    "X_train = load_images(train_ids, TRAIN_DIR)\n",
+    "X_val = load_images(val_ids, TRAIN_DIR)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "582756d1",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:42:05.390462Z",
+     "iopub.status.busy": "2025-05-22T18:42:05.389761Z",
+     "iopub.status.idle": "2025-05-22T18:42:05.737121Z",
+     "shell.execute_reply": "2025-05-22T18:42:05.736296Z"
+    },
+    "papermill": {
+     "duration": 0.352066,
+     "end_time": "2025-05-22T18:42:05.738612",
+     "exception": false,
+     "start_time": "2025-05-22T18:42:05.386546",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/usr/local/lib/python3.11/dist-packages/keras/src/layers/convolutional/base_conv.py:107: UserWarning: Do not pass an `input_shape`/`input_dim` argument to a layer. When using Sequential models, prefer using an `Input(shape)` object as the first layer in the model instead.\n",
+      "  super().__init__(activity_regularizer=activity_regularizer, **kwargs)\n",
+      "2025-05-22 18:42:05.403061: E external/local_xla/xla/stream_executor/cuda/cuda_driver.cc:152] failed call to cuInit: INTERNAL: CUDA error: Failed call to cuInit: UNKNOWN ERROR (303)\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"><span style=\"font-weight: bold\">Model: \"sequential\"</span>\n",
+       "</pre>\n"
+      ],
+      "text/plain": [
+       "\u001b[1mModel: \"sequential\"\u001b[0m\n"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/html": [
+       "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\">┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓\n",
+       "┃<span style=\"font-weight: bold\"> Layer (type)                         </span>┃<span style=\"font-weight: bold\"> Output Shape                </span>┃<span style=\"font-weight: bold\">         Param # </span>┃\n",
+       "┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩\n",
+       "│ conv2d (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">Conv2D</span>)                      │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">222</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">222</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">32</span>)        │             <span style=\"color: #00af00; text-decoration-color: #00af00\">896</span> │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ max_pooling2d (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">MaxPooling2D</span>)         │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">111</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">111</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">32</span>)        │               <span style=\"color: #00af00; text-decoration-color: #00af00\">0</span> │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ conv2d_1 (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">Conv2D</span>)                    │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">109</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">109</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">64</span>)        │          <span style=\"color: #00af00; text-decoration-color: #00af00\">18,496</span> │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ max_pooling2d_1 (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">MaxPooling2D</span>)       │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">54</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">54</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">64</span>)          │               <span style=\"color: #00af00; text-decoration-color: #00af00\">0</span> │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ flatten (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">Flatten</span>)                    │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">186624</span>)              │               <span style=\"color: #00af00; text-decoration-color: #00af00\">0</span> │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ dense (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">Dense</span>)                        │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">128</span>)                 │      <span style=\"color: #00af00; text-decoration-color: #00af00\">23,888,000</span> │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ dropout (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">Dropout</span>)                    │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">128</span>)                 │               <span style=\"color: #00af00; text-decoration-color: #00af00\">0</span> │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ dense_1 (<span style=\"color: #0087ff; text-decoration-color: #0087ff\">Dense</span>)                      │ (<span style=\"color: #00d7ff; text-decoration-color: #00d7ff\">None</span>, <span style=\"color: #00af00; text-decoration-color: #00af00\">4</span>)                   │             <span style=\"color: #00af00; text-decoration-color: #00af00\">516</span> │\n",
+       "└──────────────────────────────────────┴─────────────────────────────┴─────────────────┘\n",
+       "</pre>\n"
+      ],
+      "text/plain": [
+       "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓\n",
+       "┃\u001b[1m \u001b[0m\u001b[1mLayer (type)                        \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1mOutput Shape               \u001b[0m\u001b[1m \u001b[0m┃\u001b[1m \u001b[0m\u001b[1m        Param #\u001b[0m\u001b[1m \u001b[0m┃\n",
+       "┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩\n",
+       "│ conv2d (\u001b[38;5;33mConv2D\u001b[0m)                      │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m222\u001b[0m, \u001b[38;5;34m222\u001b[0m, \u001b[38;5;34m32\u001b[0m)        │             \u001b[38;5;34m896\u001b[0m │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ max_pooling2d (\u001b[38;5;33mMaxPooling2D\u001b[0m)         │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m111\u001b[0m, \u001b[38;5;34m111\u001b[0m, \u001b[38;5;34m32\u001b[0m)        │               \u001b[38;5;34m0\u001b[0m │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ conv2d_1 (\u001b[38;5;33mConv2D\u001b[0m)                    │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m109\u001b[0m, \u001b[38;5;34m109\u001b[0m, \u001b[38;5;34m64\u001b[0m)        │          \u001b[38;5;34m18,496\u001b[0m │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ max_pooling2d_1 (\u001b[38;5;33mMaxPooling2D\u001b[0m)       │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m54\u001b[0m, \u001b[38;5;34m54\u001b[0m, \u001b[38;5;34m64\u001b[0m)          │               \u001b[38;5;34m0\u001b[0m │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ flatten (\u001b[38;5;33mFlatten\u001b[0m)                    │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m186624\u001b[0m)              │               \u001b[38;5;34m0\u001b[0m │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ dense (\u001b[38;5;33mDense\u001b[0m)                        │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m128\u001b[0m)                 │      \u001b[38;5;34m23,888,000\u001b[0m │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ dropout (\u001b[38;5;33mDropout\u001b[0m)                    │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m128\u001b[0m)                 │               \u001b[38;5;34m0\u001b[0m │\n",
+       "├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤\n",
+       "│ dense_1 (\u001b[38;5;33mDense\u001b[0m)                      │ (\u001b[38;5;45mNone\u001b[0m, \u001b[38;5;34m4\u001b[0m)                   │             \u001b[38;5;34m516\u001b[0m │\n",
+       "└──────────────────────────────────────┴─────────────────────────────┴─────────────────┘\n"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/html": [
+       "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"><span style=\"font-weight: bold\"> Total params: </span><span style=\"color: #00af00; text-decoration-color: #00af00\">23,907,908</span> (91.20 MB)\n",
+       "</pre>\n"
+      ],
+      "text/plain": [
+       "\u001b[1m Total params: \u001b[0m\u001b[38;5;34m23,907,908\u001b[0m (91.20 MB)\n"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/html": [
+       "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"><span style=\"font-weight: bold\"> Trainable params: </span><span style=\"color: #00af00; text-decoration-color: #00af00\">23,907,908</span> (91.20 MB)\n",
+       "</pre>\n"
+      ],
+      "text/plain": [
+       "\u001b[1m Trainable params: \u001b[0m\u001b[38;5;34m23,907,908\u001b[0m (91.20 MB)\n"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/html": [
+       "<pre style=\"white-space:pre;overflow-x:auto;line-height:normal;font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace\"><span style=\"font-weight: bold\"> Non-trainable params: </span><span style=\"color: #00af00; text-decoration-color: #00af00\">0</span> (0.00 B)\n",
+       "</pre>\n"
+      ],
+      "text/plain": [
+       "\u001b[1m Non-trainable params: \u001b[0m\u001b[38;5;34m0\u001b[0m (0.00 B)\n"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "#CNN Model\n",
+    "model = Sequential([\n",
+    "    Conv2D(32, (3,3), activation='relu', input_shape=(224, 224, 3)),\n",
+    "    MaxPooling2D(2, 2),\n",
+    "    Conv2D(64, (3,3), activation='relu'),\n",
+    "    MaxPooling2D(2,2),\n",
+    "    Flatten(),\n",
+    "    Dense(128, activation='relu'),\n",
+    "    Dropout(0.5),\n",
+    "    Dense(4, activation='softmax')\n",
+    "])\n",
+    "\n",
+    "model.compile(optimizer=Adam(learning_rate=0.001),\n",
+    "              loss='categorical_crossentropy',\n",
+    "              metrics=['accuracy'])\n",
+    "\n",
+    "model.summary()\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "c459a4f6",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:42:05.746471Z",
+     "iopub.status.busy": "2025-05-22T18:42:05.745823Z",
+     "iopub.status.idle": "2025-05-22T18:45:36.002571Z",
+     "shell.execute_reply": "2025-05-22T18:45:36.001668Z"
+    },
+    "papermill": {
+     "duration": 210.262267,
+     "end_time": "2025-05-22T18:45:36.004178",
+     "exception": false,
+     "start_time": "2025-05-22T18:42:05.741911",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch 1/10\n",
+      "\u001b[1m31/31\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m56s\u001b[0m 2s/step - accuracy: 0.3850 - loss: 699.0768 - val_accuracy: 0.7469 - val_loss: 0.7415\n",
+      "Epoch 2/10\n",
+      "\u001b[1m31/31\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m53s\u001b[0m 2s/step - accuracy: 0.7998 - loss: 0.9648 - val_accuracy: 0.8041 - val_loss: 0.9448\n",
+      "Epoch 3/10\n",
+      "\u001b[1m31/31\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m50s\u001b[0m 2s/step - accuracy: 0.8546 - loss: 0.6244 - val_accuracy: 0.8490 - val_loss: 0.7652\n",
+      "Epoch 4/10\n",
+      "\u001b[1m31/31\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m51s\u001b[0m 2s/step - accuracy: 0.9167 - loss: 0.4563 - val_accuracy: 0.8490 - val_loss: 0.9725\n"
+     ]
+    }
+   ],
+   "source": [
+    "#Training\n",
+    "early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)\n",
+    "\n",
+    "history = model.fit(\n",
+    "    X_train, train_labels,\n",
+    "    validation_data=(X_val, val_labels),\n",
+    "    epochs=EPOCHS,\n",
+    "    batch_size=BATCH_SIZE,\n",
+    "    callbacks=[early_stop]\n",
+    ")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "793feb13",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:45:36.024427Z",
+     "iopub.status.busy": "2025-05-22T18:45:36.024066Z",
+     "iopub.status.idle": "2025-05-22T18:45:44.507687Z",
+     "shell.execute_reply": "2025-05-22T18:45:44.506829Z"
+    },
+    "papermill": {
+     "duration": 8.495809,
+     "end_time": "2025-05-22T18:45:44.509458",
+     "exception": false,
+     "start_time": "2025-05-22T18:45:36.013649",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "\u001b[1m11/11\u001b[0m \u001b[32m━━━━━━━━━━━━━━━━━━━━\u001b[0m\u001b[37m\u001b[0m \u001b[1m5s\u001b[0m 417ms/step\n"
+     ]
+    }
+   ],
+   "source": [
+    "#Predict on Test Set\n",
+    "test_images = load_images(test_ids['image_id'], TEST_DIR)\n",
+    "predictions = model.predict(test_images)\n",
+    "predicted_labels = np.argmax(predictions, axis=1)\n",
+    "predicted_soil_types = le.inverse_transform(predicted_labels)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "fc0f73ba",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-05-22T18:45:44.531445Z",
+     "iopub.status.busy": "2025-05-22T18:45:44.531108Z",
+     "iopub.status.idle": "2025-05-22T18:45:44.557621Z",
+     "shell.execute_reply": "2025-05-22T18:45:44.556727Z"
+    },
+    "papermill": {
+     "duration": 0.038704,
+     "end_time": "2025-05-22T18:45:44.559136",
+     "exception": false,
+     "start_time": "2025-05-22T18:45:44.520432",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>image_id</th>\n",
+       "      <th>soil_type</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>img_cdf80d6f.jpeg</td>\n",
+       "      <td>Alluvial soil</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>img_c0142a80.jpg</td>\n",
+       "      <td>Alluvial soil</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>img_91168fb0.jpg</td>\n",
+       "      <td>Alluvial soil</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>img_9822190f.jpg</td>\n",
+       "      <td>Alluvial soil</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>img_e5fc436c.jpeg</td>\n",
+       "      <td>Red soil</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "            image_id      soil_type\n",
+       "0  img_cdf80d6f.jpeg  Alluvial soil\n",
+       "1   img_c0142a80.jpg  Alluvial soil\n",
+       "2   img_91168fb0.jpg  Alluvial soil\n",
+       "3   img_9822190f.jpg  Alluvial soil\n",
+       "4  img_e5fc436c.jpeg       Red soil"
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "#Submission File using test_ids\n",
+    "submission = test_ids.copy()  \n",
+    "submission['soil_type'] = predicted_soil_types  \n",
+    "submission.to_csv(\"submission.csv\", index=False)\n",
+    "submission.head()\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "kaggle": {
+   "accelerator": "none",
+   "dataSources": [
+    {
+     "databundleVersionId": 12375409,
+     "sourceId": 102672,
+     "sourceType": "competition"
+    }
+   ],
+   "dockerImageVersionId": 31040,
+   "isGpuEnabled": false,
+   "isInternetEnabled": false,
+   "language": "python",
+   "sourceType": "notebook"
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.11"
+  },
+  "papermill": {
+   "default_parameters": {},
+   "duration": 262.468513,
+   "end_time": "2025-05-22T18:45:47.423189",
+   "environment_variables": {},
+   "exception": null,
+   "input_path": "__notebook__.ipynb",
+   "output_path": "__notebook__.ipynb",
+   "parameters": {},
+   "start_time": "2025-05-22T18:41:24.954676",
+   "version": "2.6.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
