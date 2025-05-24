@@ -148,14 +148,7 @@ This project is open-source under the [MIT License](LICENSE). You are free to us
 For questions or collaborations:
 
 **Author:** Sakthivarshan S
-**GitHub:** [github.com/yourusername](https://github.com/sakthivarshans)
-
 
 ---
 
 > "Soil is not just dirt. It's the foundation of life on Earth. Let's understand it better through AI." 🌍🧠
-
-```
-
-
-
